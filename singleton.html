@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Singleton • Fast, Fresh Food Delivery</title>
+  <meta name="description" content="Singleton delivers your favorite meals lightning-fast. Order from top restaurants, track in real time, and enjoy." />
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Singleton • Fast, Fresh Food Delivery" />
+  <meta property="og:description" content="Order from top restaurants, track in real time, and enjoy." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="https://dummyimage.com/1200x630/111827/ffffff&text=Singleton" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root{
+      --bg:#0b1020;         /* deep slate */
+      --panel:#0f162e;      /* card background */
+      --muted:#94a3b8;      /* slate-400 */
+      --text:#e2e8f0;       /* slate-200 */
+      --brand:#22d3ee;      /* cyan-400 */
+      --brand-2:#a78bfa;    /* violet-400 */
+      --accent:#34d399;     /* emerald-400 */
+      --warning:#f59e0b;    /* amber-500 */
+      --danger:#f43f5e;     /* rose-500 */
+      --ring: 0 0 0 6px color-mix(in hsl, var(--brand) 20%, transparent);
+      --radius: 16px;
+      --shadow: 0 10px 30px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.04);
+      --grid-max: 1200px;
+    }
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{
+      margin:0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
+      color:var(--text);
+      background: radial-gradient(1200px 800px at 20% -10%, rgba(168,85,247,.15), transparent 50%),
+                  radial-gradient(800px 600px at 120% 10%, rgba(34,211,238,.12), transparent 40%),
+                  var(--bg);
+    }
+    a{color:inherit}
+    .container{max-width:var(--grid-max);margin-inline:auto;padding:0 20px}
+
+    /* --- Nav --- */
+    .nav{position:sticky;top:0;z-index:50;background:linear-gradient(180deg, rgba(11,16,32,.85), rgba(11,16,32,.55));backdrop-filter: blur(8px);border-bottom:1px solid rgba(255,255,255,.06)}
+    .nav-inner{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 0}
+    .brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:.2px}
+    .brand-badge{display:grid;place-items:center;width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg, var(--brand), var(--brand-2));box-shadow:var(--shadow)}
+    .brand-badge svg{filter:drop-shadow(0 2px 6px rgba(0,0,0,.35))}
+    .nav ul{display:flex;gap:18px;list-style:none;margin:0;padding:0}
+    .nav a{opacity:.9;text-decoration:none;padding:8px 12px;border-radius:10px}
+    .nav a:hover{background:rgba(255,255,255,.06)}
+    .nav-cta{display:flex;gap:10px;align-items:center}
+    .btn{appearance:none;border:0;border-radius:14px;padding:12px 16px;font-weight:600;cursor:pointer;transition:.2s transform, .2s box-shadow, .2s background;box-shadow:var(--shadow)}
+    .btn:active{transform:translateY(1px)}
+    .btn-primary{background:linear-gradient(135deg, var(--brand), var(--brand-2));color:#0b1020}
+    .btn-outline{background:transparent;color:var(--text);border:1px solid rgba(148,163,184,.35)}
+
+    /* --- Hero --- */
+    .hero{padding:64px 0 36px}
+    .hero-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:28px;align-items:center}
+    .eyebrow{display:inline-flex;gap:8px;align-items:center;padding:6px 10px;border-radius:999px;background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));border:1px solid rgba(255,255,255,.08);font-size:12px;color:var(--muted)}
+    h1{font-size: clamp(34px, 5vw, 54px);line-height:1.05;margin:14px 0}
+    .lead{font-size: clamp(16px, 1.8vw, 18px);color:var(--muted);max-width:60ch}
+    .hero-cta{display:flex;gap:12px;margin-top:22px;flex-wrap:wrap}
+    .app-badges{display:flex;gap:10px;margin-top:8px;align-items:center}
+    .phone{position:relative;border-radius:28px;overflow:hidden;border:1px solid rgba(255,255,255,.08);box-shadow:var(--shadow)}
+    .phone::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg, rgba(255,255,255,.07), transparent 30%)}
+    .phone img{display:block;width:100%;height:auto}
+
+    /* --- Features --- */
+    .section{padding:56px 0}
+    .kicker{color:var(--brand)}
+    .section h2{font-size: clamp(26px, 3.5vw, 38px);margin:6px 0 8px}
+    .grid{display:grid;gap:18px}
+    .features{grid-template-columns:repeat(3,1fr)}
+    .card{background:var(--panel);border:1px solid rgba(255,255,255,.06);border-radius:var(--radius);padding:22px;box-shadow:var(--shadow)}
+    .card h3{margin:8px 0 4px}
+    .muted{color:var(--muted)}
+
+    /* --- Menu --- */
+    .menu{grid-template-columns:repeat(4,1fr)}
+    .menu .item{overflow:hidden}
+    .menu .thumb{border-radius:12px;overflow:hidden;aspect-ratio:4/3;background:linear-gradient(135deg, rgba(34,211,238,.25), rgba(167,139,250,.25))}
+    .price{font-weight:700}
+
+    /* --- How it works --- */
+    .steps{grid-template-columns:repeat(3,1fr)}
+    .step-num{width:36px;height:36px;border-radius:999px;display:grid;place-items:center;background:linear-gradient(135deg,var(--brand),var(--brand-2));color:#0b1020;font-weight:800}
+
+    /* --- Testimonials --- */
+    .testimonials{grid-template-columns:repeat(3,1fr)}
+    blockquote{margin:0}
+    .stars{letter-spacing:1px}
+
+    /* --- CTA band --- */
+    .band{background:linear-gradient(135deg, rgba(34,211,238,.15), rgba(167,139,250,.12));border:1px solid rgba(255,255,255,.08);border-radius:24px;padding:26px;display:grid;gap:14px;grid-template-columns:auto 220px}
+
+    /* --- Footer --- */
+    footer{padding:46px 0;color:var(--muted)}
+
+    /* --- Forms --- */
+    input[type="text"], input[type="email"], input[type="search"]{width:100%;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.03);color:var(--text)}
+    input:focus{outline:none;box-shadow:var(--ring)}
+
+    /* --- Utilities --- */
+    .row{display:flex;gap:10px;align-items:center}
+    .center{text-align:center}
+    .pill{border-radius:999px;padding:8px 12px;border:1px solid rgba(255,255,255,.1)}
+
+    /* --- Responsive --- */
+    @media (max-width: 1024px){
+      .menu{grid-template-columns:repeat(3,1fr)}
+      .features,.steps,.testimonials{grid-template-columns:repeat(2,1fr)}
+      .hero-grid{grid-template-columns:1fr}
+      .band{grid-template-columns:1fr}
+    }
+    @media (max-width: 640px){
+      .menu{grid-template-columns:1fr 1fr}
+      .features,.steps,.testimonials{grid-template-columns:1fr}
+      .nav ul{display:none}
+      .nav .hamburger{display:inline-flex}
+    }
+    .hamburger{display:none;border:1px solid rgba(255,255,255,.15);background:transparent;border-radius:10px;padding:8px}
+  </style>
+</head>
+<body>
+  <!-- NAV -->
+  <nav class="nav" aria-label="Primary">
+    <div class="container nav-inner">
+      <a class="brand" href="#home" aria-label="Singleton Home">
+        <span class="brand-badge" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 3L20 8V16L12 21L4 16V8L12 3Z" fill="white" opacity=".9"/>
+            <path d="M12 7V12L16 14" stroke="#0b1020" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span>Singleton</span>
+      </a>
+
+      <ul aria-label="Sections">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#menu">Menu</a></li>
+        <li><a href="#how">How it works</a></li>
+        <li><a href="#testimonials">Reviews</a></li>
+        <li><a href="#contact">Contact</a></li>
+      </ul>
+
+      <div class="nav-cta">
+        <a class="btn btn-outline" href="#download">Get the App</a>
+        <button class="hamburger" aria-label="Open menu" id="openMenu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M3 6H21M3 12H21M3 18H21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- MOBILE SHEET -->
+  <dialog id="sheet" style="border:none;border-radius:18px;background:linear-gradient(180deg, rgba(15,22,46,.98), rgba(15,22,46,.96));color:var(--text);max-width:520px;width:92%;padding:0;box-shadow:var(--shadow)">
+    <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,.06);display:flex;justify-content:space-between;align-items:center">
+      <strong>Menu</strong>
+      <button id="closeMenu" class="btn btn-outline" style="padding:8px 10px">Close</button>
+    </div>
+    <div style="padding:14px 18px;display:grid;gap:10px">
+      <a class="pill" href="#features">Features</a>
+      <a class="pill" href="#menu">Menu</a>
+      <a class="pill" href="#how">How it works</a>
+      <a class="pill" href="#testimonials">Reviews</a>
+      <a class="pill" href="#contact">Contact</a>
+    </div>
+  </dialog>
+
+  <!-- HERO -->
+  <header id="home" class="hero container">
+    <div class="hero-grid">
+      <div>
+        <span class="eyebrow"><span aria-hidden="true">⚡</span> Delivery under 30 minutes</span>
+        <h1>Food delivery that’s <span style="background:linear-gradient(135deg, var(--brand), var(--brand-2));-webkit-background-clip:text;background-clip:text;color:transparent">insanely fast</span> & always fresh.</h1>
+        <p class="lead">Singleton connects you to top-rated restaurants in your city. Track orders in real time, earn rewards, and savor every bite.</p>
+        <div class="hero-cta">
+          <a class="btn btn-primary" href="#menu">Order Now</a>
+          <a class="btn btn-outline" href="#how">See how it works</a>
+        </div>
+        <div class="app-badges">
+          <img src="https://dummyimage.com/140x44/0b1020/e2e8f0&text=App+Store" alt="Download on the App Store" width="140" height="44" />
+          <img src="https://dummyimage.com/140x44/0b1020/e2e8f0&text=Google+Play" alt="Get it on Google Play" width="140" height="44" />
+        </div>
+      </div>
+      <div>
+        <div class="phone">
+          <img src="https://dummyimage.com/880x1100/111827/94a3b8&text=Order+Tracking+Screen" alt="App phone mock showing order tracking" />
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- FEATURES -->
+  <section id="features" class="section container">
+    <p class="kicker">Why Singleton</p>
+    <h2>Designed for speed, safety, and smiles</h2>
+    <div class="grid features">
+      <article class="card">
+        <div class="row"><span class="step-num" aria-hidden="true">1</span><h3>Lightning-fast delivery</h3></div>
+        <p class="muted">Optimized routing gets your food from kitchen to door in record time.</p>
+      </article>
+      <article class="card">
+        <div class="row"><span class="step-num" aria-hidden="true">2</span><h3>Live order tracking</h3></div>
+        <p class="muted">Know exactly where your meal is—minute by minute, street by street.</p>
+      </article>
+      <article class="card">
+        <div class="row"><span class="step-num" aria-hidden="true">3</span><h3>Contactless & secure</h3></div>
+        <p class="muted">Safe handoffs, verified riders, and secure payments built-in.</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- MENU SHOWCASE -->
+  <section id="menu" class="section container">
+    <p class="kicker">Popular right now</p>
+    <h2>Curated picks from top restaurants</h2>
+
+    <div class="grid menu" role="list" aria-label="Sample dishes">
+      <!-- Item 1 -->
+      <article class="card item" role="listitem">
+        <div class="thumb" aria-hidden="true"></div>
+        <h3>Spicy Paneer Wrap <span class="price">₹199</span></h3>
+        <p class="muted">Soft tortilla, cottage cheese, crunchy veggies, secret sauce.</p>
+        <div class="row">
+          <button class="btn btn-primary" aria-label="Add Spicy Paneer Wrap to cart">Add</button>
+          <button class="btn btn-outline">Details</button>
+        </div>
+      </article>
+      <!-- Item 2 -->
+      <article class="card item" role="listitem">
+        <div class="thumb" aria-hidden="true"></div>
+        <h3>Margherita Pizza <span class="price">₹329</span></h3>
+        <p class="muted">San Marzano tomatoes, fresh basil, mozzarella, olive oil.</p>
+        <div class="row">
+          <button class="btn btn-primary">Add</button>
+          <button class="btn btn-outline">Details</button>
+        </div>
+      </article>
+      <!-- Item 3 -->
+      <article class="card item" role="listitem">
+        <div class="thumb" aria-hidden="true"></div>
+        <h3>Hyderabadi Biryani <span class="price">₹279</span></h3>
+        <p class="muted">Long-grain basmati, saffron, caramelized onions, tender meat.</p>
+        <div class="row">
+          <button class="btn btn-primary">Add</button>
+          <button class="btn btn-outline">Details</button>
+        </div>
+      </article>
+      <!-- Item 4 -->
+      <article class="card item" role="listitem">
+        <div class="thumb" aria-hidden="true"></div>
+        <h3>Vegan Buddha Bowl <span class="price">₹249</span></h3>
+        <p class="muted">Quinoa, roasted veggies, hummus, seeds, herby dressing.</p>
+        <div class="row">
+          <button class="btn btn-primary">Add</button>
+          <button class="btn btn-outline">Details</button>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section id="how" class="section container">
+    <p class="kicker">Three easy steps</p>
+    <h2>From craving to comfort—quickly</h2>
+    <div class="grid steps">
+      <article class="card">
+        <div class="row">
+          <span class="step-num" aria-hidden="true">1</span>
+          <h3>Choose your cravings</h3>
+        </div>
+        <p class="muted">Browse thousands of dishes and restaurants—with smart filters for diet and price.</p>
+      </article>
+      <article class="card">
+        <div class="row">
+          <span class="step-num" aria-hidden="true">2</span>
+          <h3>Track in real time</h3>
+        </div>
+        <p class="muted">Follow your order from kitchen to doorstep on a live map.</p>
+      </article>
+      <article class="card">
+        <div class="row">
+          <span class="step-num" aria-hidden="true">3</span>
+          <h3>Enjoy & rate</h3>
+        </div>
+        <p class="muted">Earn rewards with every bite and help others discover great food.</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- REVIEWS -->
+  <section id="testimonials" class="section container">
+    <p class="kicker">Loved by foodies</p>
+    <h2>What customers say</h2>
+    <div class="grid testimonials">
+      <figure class="card">
+        <blockquote>
+          <p>“Fastest delivery in my area—still hot and crispy. Singleton is my go-to!”</p>
+        </blockquote>
+        <figcaption class="muted"><span class="stars" aria-hidden="true">★★★★★</span> — Ananya, Pune</figcaption>
+      </figure>
+      <figure class="card">
+        <blockquote>
+          <p>“Love the real-time tracking. I can time my tea perfectly before food arrives.”</p>
+        </blockquote>
+        <figcaption class="muted"><span class="stars" aria-hidden="true">★★★★☆</span> — Rahul, Hyderabad</figcaption>
+      </figure>
+      <figure class="card">
+        <blockquote>
+          <p>“Great veg options and clean packaging. Rewards make it even better.”</p>
+        </blockquote>
+        <figcaption class="muted"><span class="stars" aria-hidden="true">★★★★★</span> — Sana, Bengaluru</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- DOWNLOAD / CTA -->
+  <section id="download" class="section container">
+    <div class="band">
+      <div>
+        <h3>Get Singleton on your phone</h3>
+        <p class="muted">Order anywhere, earn rewards, and track your delivery live. Available on iOS and Android.</p>
+      </div>
+      <div class="row" style="justify-content:flex-end;flex-wrap:wrap;gap:10px">
+        <a class="btn btn-primary" href="#">Download iOS</a>
+        <a class="btn btn-outline" href="#">Download Android</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONTACT -->
+  <section id="contact" class="section container">
+    <p class="kicker">We’re here to help</p>
+    <h2>Contact us</h2>
+    <div class="grid" style="grid-template-columns:1.2fr .8fr; gap:24px">
+      <form class="card" id="contactForm" novalidate>
+        <div class="row" style="gap:12px;flex-wrap:wrap">
+          <div style="flex:1 1 240px">
+            <label for="name" class="muted">Name</label>
+            <input id="name" name="name" type="text" placeholder="Your name" required />
+          </div>
+          <div style="flex:1 1 240px">
+            <label for="email" class="muted">Email</label>
+            <input id="email" name="email" type="email" placeholder="you@example.com" required />
+          </div>
+        </div>
+        <div style="margin-top:12px">
+          <label for="message" class="muted">Message</label>
+          <textarea id="message" name="message" placeholder="How can we help?" rows="5" style="width:100%;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.03);color:var(--text)" required></textarea>
+        </div>
+        <div class="row" style="margin-top:14px;justify-content:space-between">
+          <label class="row muted" style="gap:8px"><input type="checkbox" id="updates"/> Send me occasional updates</label>
+          <button class="btn btn-primary" type="submit">Send</button>
+        </div>
+        <p id="formMsg" class="muted" role="status" style="margin-top:10px"></p>
+      </form>
+
+      <aside class="card" aria-label="Support info">
+        <h3>Support</h3>
+        <p class="muted">Email: support@singleton.app<br>Phone: +91 98765 43210</p>
+        <h4 style="margin-top:12px">Delivery hours</h4>
+        <p class="muted">Mon–Sun: 8:00 – 23:30</p>
+        <h4 style="margin-top:12px">Follow us</h4>
+        <p class="muted">@singletonapp on all platforms</p>
+      </aside>
+    </div>
+  </section>
+
+  <footer class="container">
+    <div class="row" style="justify-content:space-between;flex-wrap:wrap">
+      <p>© <span id="year"></span> Singleton Technologies Pvt Ltd. All rights reserved.</p>
+      <p class="muted">Privacy • Terms • Pricing</p>
+    </div>
+  </footer>
+
+  <script>
+    // mobile menu
+    const openBtn = document.getElementById('openMenu');
+    const closeBtn = document.getElementById('closeMenu');
+    const sheet = document.getElementById('sheet');
+    openBtn?.addEventListener('click', () => sheet.showModal());
+    closeBtn?.addEventListener('click', () => sheet.close());
+
+    // year
+    document.getElementById('year').textContent = new Date().getFullYear();
+
+    // simple form validation demo
+    const form = document.getElementById('contactForm');
+    const msg = document.getElementById('formMsg');
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const valid = form.checkValidity();
+      if(!valid){
+        msg.textContent = 'Please fill in all required fields.';
+        msg.style.color = 'var(--warning)';
+        form.reportValidity();
+        return;
+      }
+      const data = Object.fromEntries(new FormData(form).entries());
+      msg.textContent = 'Thanks, ' + (data.name || 'friend') + '! We\'ll get back to you soon.';
+      msg.style.color = 'var(--accent)';
+      form.reset();
+    });
+  </script>
+</body>
+</html>
