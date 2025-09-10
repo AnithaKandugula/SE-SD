@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Ride Hailing Design — Observer / Strategy / Command (Demo)</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--muted:#9aa4b2;--accent:#18a999;--danger:#ff5c5c}
+    body{font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial; background:linear-gradient(180deg,#071124 0%, #0b1626 100%); color:#e6eef6; margin:0; padding:24px}
+    .container{max-width:1100px;margin:0 auto}
+    header{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+    h1{font-size:20px;margin:0}
+    p.lead{margin:0;color:var(--muted)}
+    .grid{display:grid;grid-template-columns:360px 1fr;gap:18px;margin-top:18px}
+    .card{background:var(--card);border-radius:12px;padding:14px;box-shadow:0 6px 18px rgba(2,6,23,0.6)}
+    label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+    select,input,button{width:100%;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit}
+    button.primary{background:var(--accent);color:#021215;border:0;font-weight:600}
+    button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.04)}
+    .section{margin-bottom:12px}
+    .log{height:220px;overflow:auto;background:rgba(255,255,255,0.02);padding:10px;border-radius:8px;font-family:monospace;font-size:13px}
+    .row{display:flex;gap:8px}
+    .small{font-size:13px;color:var(--muted)}
+    .drivers{display:flex;flex-direction:column;gap:8px}
+    .driver{display:flex;justify-content:space-between;align-items:center;padding:8px;border-radius:8px;background:linear-gradient(180deg, rgba(255,255,255,0.015),transparent);}
+    .notif{border-left:4px solid var(--accent);padding-left:10px;margin-bottom:8px}
+    .danger{border-left-color:var(--danger)}
+    footer{margin-top:18px;color:var(--muted);font-size:13px}
+    @media (max-width:880px){.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div style="width:48px;height:48px;background:linear-gradient(135deg,#0ea5a4,#06b6d4);border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700">RH</div>
+      <div>
+        <h1>Ride Hailing — Patterns Demo</h1>
+        <p class="lead">Observer (notifications) • Strategy (fare calculation) • Command (ride operations). Single-file demo — open console for deeper traces.</p>
+      </div>
+    </header>
+
+    <div class="grid">
+      <div class="card">
+        <div class="section">
+          <label>Choose Fare Strategy</label>
+          <select id="strategySelect">
+            <option value="normal">Normal Fare</option>
+            <option value="surge">Surge Pricing (x1.8)</option>
+            <option value="discount">Discounted (₹50 off)</option>
+          </select>
+        </div>
+
+        <div class="section">
+          <label>Ride Controls (Commands)</label>
+          <div class="row">
+            <button id="bookBtn" class="primary">Book Ride</button>
+            <button id="cancelBtn" class="ghost">Cancel Ride</button>
+          </div>
+          <div style="height:8px"></div>
+          <div class="row">
+            <input id="ratingInput" type="number" min="1" max="5" placeholder="rating 1-5" />
+            <button id="rateBtn" class="ghost">Rate Ride</button>
+          </div>
+        </div>
+
+        <div class="section">
+          <label>Nearby Drivers (simulate)</label>
+          <div class="drivers" id="driversList"></div>
+        </div>
+
+        <div class="section">
+          <label>Notifications (Observer)</label>
+          <div class="log" id="notifArea"></div>
+        </div>
+
+        <div class="section small">
+          <div><strong>How it maps to patterns:</strong></div>
+          <ul>
+            <li>Observer: RiderSession subscribes to Ride events and receives push messages.</li>
+            <li>Strategy: PricingService chooses a FareStrategy at runtime.</li>
+            <li>Command: Book/Cancel/Rate are ICommand objects executed by RideOrchestrator.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top:0">System Live View</h3>
+        <div class="section">
+          <label>Ride State</label>
+          <pre id="rideState" class="log">No active ride.</pre>
+        </div>
+
+        <div class="section">
+          <label>Event Bus Log</label>
+          <div id="eventLog" class="log"></div>
+        </div>
+
+        <div class="section">
+          <label>Console</label>
+          <div id="consoleLog" class="log"></div>
+        </div>
+
+        <footer>Demo: Browser-only. In a real system these components would be separate microservices connected by messaging and push/websocket infrastructure.</footer>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /*************************************************************************
+     * Simple single-file demo implementing:
+     * - Observer (EventBus / subscriptions)
+     * - Strategy (Fare strategies)
+     * - Command (ride commands executed by orchestrator)
+     *
+     * It's intentionally in-memory and synchronous for clarity.
+     *************************************************************************/
+
+    // --- Utilities ---
+    const $ = id => document.getElementById(id);
+    function log(el, s){ el.innerHTML = s + '\n' + el.innerHTML }
+    function appendLog(el, s){ el.innerHTML = (el.innerHTML ? el.innerHTML + '\n' : '') + s }
+
+    // --- Event Bus / Observer implementation ---
+    class EventBus {
+      constructor(){ this.topics = {} }
+      publish(topic, payload){
+        appendLog($('eventLog'), `[${new Date().toLocaleTimeString()}] ${topic} ${JSON.stringify(payload)}`)
+        const subs = this.topics[topic] || [];
+        subs.forEach(fn => { try{ fn(payload) } catch(e){ console.error(e) } });
+      }
+      subscribe(topic, fn){ this.topics[topic] = this.topics[topic] || []; this.topics[topic].push(fn) }
+      unsubscribe(topic, fn){ if(!this.topics[topic]) return; this.topics[topic] = this.topics[topic].filter(f=>f!==fn) }
+    }
+
+    const eventBus = new EventBus();
+
+    // --- Notification Service (acts on observer updates) ---
+    class NotificationService {
+      pushToRider(riderId, message, danger=false){
+        const el = $('notifArea');
+        const wrapper = document.createElement('div');
+        wrapper.className = 'notif' + (danger? ' danger':'');
+        wrapper.innerHTML = `<div><strong>${message.type}</strong> — ${message.text}</div><div class="small">at ${new Date().toLocaleTimeString()}</div>`;
+        el.prepend(wrapper);
+        appendLog($('consoleLog'), `[NOTIF] ${JSON.stringify(message)}`)
+      }
+    }
+
+    const notificationService = new NotificationService();
+
+    // --- Strategy: Fare calculation ---
+    class FareStrategy { calculate(base, distanceKm, durationMin){ throw 'Implement' } }
+    class NormalFare extends FareStrategy { calculate(base, d, t){ return base + d*12 + t*1 } }
+    class SurgeFare extends FareStrategy { constructor(mult){ super(); this.mult = mult } calculate(base,d,t){ return (base + d*12 + t*1) * this.mult } }
+    class DiscountFare extends FareStrategy { constructor(discount){ super(); this.discount = discount } calculate(base,d,t){ return Math.max(0, base + d*12 + t*1 - this.discount) } }
+
+    class PricingService {
+      constructor(){ this.strategy = new NormalFare() }
+      setStrategy(name){
+        if(name==='normal') this.strategy = new NormalFare();
+        else if(name==='surge') this.strategy = new SurgeFare(1.8);
+        else if(name==='discount') this.strategy = new DiscountFare(50);
+      }
+      calculate(details){ return this.strategy.calculate(details.base, details.distanceKm, details.durationMin) }
+    }
+
+    const pricingService = new PricingService();
+
+    // --- Command pattern ---
+    class ICommand { execute(){ throw 'not implemented' } }
+
+    // Simple in-memory ride repository (would be DB in real world)
+    const RideRepo = {
+      rides: {},
+      create(r){ this.rides[r.id] = r; return r },
+      update(id, patch){ this.rides[id] = {...this.rides[id], ...patch}; return this.rides[id] },
+      get(id){ return this.rides[id] }
+    }
+
+    class BookRideCommand extends ICommand {
+      constructor(orchestrator, rideDetails){ super(); this.orchestrator = orchestrator; this.rideDetails = rideDetails }
+      execute(){
+        // create ride
+        const id = 'ride_' + Math.floor(Math.random()*9000+1000);
+        const ride = { id, status: 'REQUESTED', ...this.rideDetails };
+        RideRepo.create(ride);
+        this.orchestrator.publish('RideRequested', ride);
+        return ride;
+      }
+    }
+
+    class CancelRideCommand extends ICommand {
+      constructor(orchestrator, rideId, cancelledBy){ super(); this.orchestrator = orchestrator; this.rideId = rideId; this.cancelledBy = cancelledBy }
+      execute(){
+        const r = RideRepo.get(this.rideId);
+        if(!r) throw 'ride not found';
+        if(r.status==='CANCELLED' || r.status==='COMPLETED'){
+          appendLog($('consoleLog'), '[CMD] Cancel ignored (already final)');
+          return r;
+        }
+        RideRepo.update(this.rideId, { status: 'CANCELLED', cancelledBy: this.cancelledBy });
+        this.orchestrator.publish('RideCancelled', { id: this.rideId, by: this.cancelledBy });
+        return RideRepo.get(this.rideId);
+      }
+    }
+
+    class RateRideCommand extends ICommand {
+      constructor(orchestrator, rideId, rating){ super(); this.orchestrator = orchestrator; this.rideId = rideId; this.rating = rating }
+      execute(){
+        const r = RideRepo.get(this.rideId);
+        if(!r) throw 'ride not found';
+        RideRepo.update(this.rideId, { rating: this.rating });
+        this.orchestrator.publish('RideRated', { id: this.rideId, rating: this.rating });
+        return RideRepo.get(this.rideId);
+      }
+    }
+
+    // --- Ride Orchestrator (executes commands, publishes events) ---
+    class RideOrchestrator {
+      constructor(bus){ this.bus = bus }
+      executeCommand(cmd){
+        try{
+          const res = cmd.execute();
+          appendLog($('consoleLog'), `[ORCH] Executed command ${cmd.constructor.name}`);
+          return res;
+        }catch(e){ appendLog($('consoleLog'), '[ORCH] Command failed: '+e); throw e }
+      }
+      publish(topic,payload){ this.bus.publish(topic,payload) }
+    }
+
+    const orchestrator = new RideOrchestrator(eventBus);
+
+    // --- Mock matching and driver actions ---
+    const drivers = [
+      { id: 'd1', name: 'Driver A', eta: 3 },
+      { id: 'd2', name: 'Driver B', eta: 5 }
+    ];
+
+    function renderDrivers(){
+      const el = $('driversList'); el.innerHTML='';
+      drivers.forEach(d=>{
+        const div = document.createElement('div'); div.className='driver';
+        div.innerHTML = `<div><strong>${d.name}</strong><div class="small">ETA ${d.eta}m</div></div>`;
+        const btns = document.createElement('div');
+        const accept = document.createElement('button'); accept.textContent='Accept'; accept.className='ghost';
+        const cancel = document.createElement('button'); cancel.textContent='Cancel'; cancel.className='ghost';
+        accept.onclick = ()=> simulateDriverAccept(d.id);
+        cancel.onclick = ()=> simulateDriverCancel(d.id);
+        btns.appendChild(accept); btns.appendChild(cancel);
+        div.appendChild(btns);
+        el.appendChild(div);
+      })
+    }
+
+    function simulateDriverAccept(driverId){
+      // find the first requested ride
+      const ride = Object.values(RideRepo.rides).find(r=>r.status==='REQUESTED');
+      if(!ride){ appendLog($('consoleLog'), '[SIM] No requested ride to accept'); return }
+      RideRepo.update(ride.id, { status: 'ACCEPTED', driverId });
+      orchestrator.publish('DriverAccepted', { rideId: ride.id, driverId });
+    }
+
+    function simulateDriverCancel(driverId){
+      // find the ride driver accepted
+      const ride = Object.values(RideRepo.rides).find(r=>r.driverId===driverId && r.status!=='CANCELLED');
+      if(!ride){ appendLog($('consoleLog'), '[SIM] No ride accepted by that driver'); return }
+      RideRepo.update(ride.id, { status: 'CANCELLED', cancelledBy: 'driver', cancelledDriver: driverId });
+      orchestrator.publish('DriverCancelled', { rideId: ride.id, driverId });
+    }
+
+    // --- Rider session (acts as an Observer) ---
+    class RiderSession {
+      constructor(riderId){ this.riderId = riderId; this.onEvent = this.onEvent.bind(this) }
+      onEvent(e){
+        // e is payload from event bus
+        if(e.id){ // ride-related
+          const r = RideRepo.get(e.id) || RideRepo.get(e.rideId) || e;
+          $('rideState').textContent = JSON.stringify(r, null, 2);
+        }
+        // translate domain events into user notifications
+        if(e.type==='DRIVER_OFFER'){
+          notificationService.pushToRider(this.riderId, { type: 'DRIVER_OFFER', text: `Driver ${e.driver} offered to pick you up` });
+        }
+      }
+    }
+
+    const riderSession = new RiderSession('rider_1');
+
+    // Subscribe rider session to bus topics (Observer pattern)
+    eventBus.subscribe('DriverAccepted', payload => {
+      // notify rider client immediately when a driver accepts
+      const rideId = payload.rideId || payload.id;
+      notificationService.pushToRider('rider_1', { type: 'DRIVER_ACCEPTED', text: `Driver ${payload.driverId} accepted your ride (ride ${rideId})` });
+      $('rideState').textContent = JSON.stringify(RideRepo.get(rideId), null, 2);
+    });
+
+    eventBus.subscribe('DriverCancelled', payload => {
+      const rideId = payload.rideId || payload.id;
+      notificationService.pushToRider('rider_1', { type: 'DRIVER_CANCELLED', text: `Driver ${payload.driverId} cancelled the ride ${rideId}` }, true);
+      $('rideState').textContent = JSON.stringify(RideRepo.get(rideId), null, 2);
+    });
+
+    eventBus.subscribe('RideRequested', payload => { appendLog($('consoleLog'), '[BUS] RideRequested '+payload.id); });
+    eventBus.subscribe('RideCancelled', payload => { appendLog($('consoleLog'), '[BUS] RideCancelled '+payload.id); });
+    eventBus.subscribe('RideRated', payload => { appendLog($('consoleLog'), '[BUS] RideRated '+JSON.stringify(payload)); });
+
+    // Also update UI for general bus events
+    eventBus.subscribe('DriverAccepted', payload => appendLog($('consoleLog'), `[BUS] DriverAccepted ${JSON.stringify(payload)}`));
+
+    // --- Wire up UI controls (create & execute commands) ---
+    $('strategySelect').addEventListener('change', e=>{
+      pricingService.setStrategy(e.target.value);
+      appendLog($('consoleLog'), `[PRICE] Strategy set to ${e.target.value}`);
+    });
+
+    $('bookBtn').addEventListener('click', ()=>{
+      // Build a demo ride details object; normally this comes from user input
+      const details = { riderId: 'rider_1', origin: 'A', destination: 'B', distanceKm: 5, durationMin: 12, base: 40 };
+      const fare = pricingService.calculate(details);
+      details.fareEstimate = Math.round(fare);
+      const cmd = new BookRideCommand(orchestrator, details);
+      const ride = orchestrator.executeCommand(cmd);
+      appendLog($('consoleLog'), `[UI] Booked ride ${ride.id} fareEstimate ₹${ride.fareEstimate}`);
+      // Publish a logical 'offer' to drivers (matching service would do this)
+      // For demo we simulate driver offers
+      setTimeout(()=>{
+        eventBus.publish('DriverOffer', { id: ride.id, driver: drivers[0].name });
+        notificationService.pushToRider('rider_1', { type: 'DRIVER_OFFER', text: `Driver ${drivers[0].name} will come in ${drivers[0].eta}m` });
+      }, 800);
+    });
+
+    $('cancelBtn').addEventListener('click', ()=>{
+      const ride = Object.values(RideRepo.rides).find(r=>r.status==='REQUESTED' || r.status==='ACCEPTED');
+      if(!ride){ appendLog($('consoleLog'), '[UI] No active ride to cancel'); return }
+      const cmd = new CancelRideCommand(orchestrator, ride.id, 'rider');
+      orchestrator.executeCommand(cmd);
+    });
+
+    $('rateBtn').addEventListener('click', ()=>{
+      const rating = Number($('ratingInput').value);
+      if(!rating || rating<1 || rating>5){ appendLog($('consoleLog'), '[UI] Provide rating 1-5'); return }
+      const ride = Object.values(RideRepo.rides).find(r=>r.status==='COMPLETED' || r.status==='CANCELLED');
+      if(!ride){ appendLog($('consoleLog'), '[UI] No finished ride to rate'); return }
+      const cmd = new RateRideCommand(orchestrator, ride.id, rating);
+      orchestrator.executeCommand(cmd);
+    });
+
+    // Simulate driver accept/cancel subscribers from EventBus -> Notification (Observer mapping to NotificationService)
+    eventBus.subscribe('DriverOffer', payload => { appendLog($('consoleLog'), `[BUS] DriverOffer ${JSON.stringify(payload)}`) });
+
+    // Small automation: when DriverAccepted happens, after 8s mark ride COMPLETED
+    eventBus.subscribe('DriverAccepted', payload => {
+      const rideId = payload.rideId;
+      setTimeout(()=>{
+        if(RideRepo.get(rideId) && RideRepo.get(rideId).status==='ACCEPTED'){
+          RideRepo.update(rideId, { status: 'COMPLETED' });
+          orchestrator.publish('RideCompleted', { id: rideId });
+          appendLog($('consoleLog'), `[SIM] Ride ${rideId} completed`);
+        }
+      }, 8000);
+    });
+
+    renderDrivers();
+
+    // Initial state
+    $('rideState').textContent = 'No active ride.';
+    appendLog($('consoleLog'), '[INIT] Demo ready. Open the console for more traces.');
+  </script>
+</body>
+</html>
